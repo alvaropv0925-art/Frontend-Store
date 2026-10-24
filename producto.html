@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FrontEnd Store</title>
+    <link rel="stylesheet" href="css/normalize.css">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600&family=Staatliches&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header class="header">
+        <a class="header__logo" href="index.html" aria-label="FrontEnd Store, inicio">
+            <span class="logo__linea1">FRONTEND</span>
+            <span class="logo__linea2">STORE</span>
+        </a>
+    </header>
+
+    <nav class="navegacion">
+        <a class="navegacion__enlace navegacion__enlace--activo" href="index.html">Tienda</a>
+        <a class="navegacion__enlace" href="nosotros.html">Nosotros</a>
+    </nav>
+
+    <main class="contenedor">
+        <a class="volver" href="index.html">Volver a la tienda</a>
+        <h1 id="titulo">Cargando...</h1>
+
+        <div class="camisa" id="camisa" hidden>
+            <img class="camisa__imagen" id="imagen" src="" alt="Imagen del Producto">
+
+            <div class="camisa__contenido">
+                <p id="descripcion"></p>
+                <p class="camisa__precio">Precio: <span id="precio"></span> c/u</p>
+
+                <form class="formulario" id="formulario" novalidate>
+                    <select class="formulario__campo" name="talla" required>
+                        <option value="" disabled selected>-- Seleccionar Talla --</option>
+                        <option>Chica</option>
+                        <option>Mediana</option>
+                        <option>Grande</option>
+                    </select>
+                    <input class="formulario__campo" type="number" name="cantidad" id="cantidad" placeholder="Cantidad" min="1" max="99" required>
+                    <input class="formulario__campo formulario__campo--ancho" type="text" name="nombre" placeholder="Nombre completo" maxlength="80" required>
+                    <input class="formulario__campo" type="email" name="correo" placeholder="Correo electrónico" maxlength="100" required>
+                    <input class="formulario__campo" type="tel" name="telefono" placeholder="Teléfono" maxlength="20" required>
+                    <input class="formulario__campo formulario__campo--ancho" type="text" name="direccion" placeholder="Dirección de envío" maxlength="150" required>
+
+                    <p class="formulario__total formulario__campo--ancho">Total: <span id="total">$0</span></p>
+                    <input class="formulario__submit" type="submit" value="Comprar">
+                    <p class="formulario__mensaje" id="mensaje" role="status"></p>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <p class="footer__texto">Front End Store - Todos los derechos Reservados 2022.</p>
+    </footer>
+
+    <script>
+        const $ = id => document.getElementById(id);
+        const pesos = n => '$' + new Intl.NumberFormat('es-CO').format(n);
+        const id = Number(new URLSearchParams(location.search).get('id'));
+        let producto = null;
+
+        function mostrarMensaje(texto, esError) {
+            const m = $('mensaje');
+            m.textContent = texto;
+            m.className = 'formulario__mensaje ' + (esError ? 'formulario__mensaje--error' : 'formulario__mensaje--ok');
+        }
+
+        function actualizarTotal() {
+            const cant = parseInt($('cantidad').value, 10);
+            $('total').textContent = pesos(cant > 0 && producto ? cant * producto.precio : 0);
+        }
+
+        async function cargar() {
+            try {
+                const resp = await fetch('data/productos.json');
+                const lista = await resp.json();
+                producto = lista.find(p => p.id === id);
+            } catch (e) {
+                $('titulo').textContent = 'No se pudo cargar el producto. Abre la tienda con: node server.js';
+                return;
+            }
+            if (!producto) {
+                $('titulo').textContent = 'Producto no encontrado';
+                return;
+            }
+            document.title = producto.nombre + ' - FrontEnd Store';
+            $('titulo').textContent = producto.nombre;
+            $('imagen').src = producto.imagen;
+            $('imagen').alt = 'Camiseta ' + producto.nombre;
+            $('descripcion').textContent = producto.descripcion;
+            $('precio').textContent = pesos(producto.precio);
+            $('camisa').hidden = false;
+        }
+
+        $('cantidad').addEventListener('input', actualizarTotal);
+
+        $('formulario').addEventListener('submit', async e => {
+            e.preventDefault();
+            const f = e.target;
+            if (!f.checkValidity()) { f.reportValidity(); return; }
+
+            const datos = Object.fromEntries(new FormData(f));
+            datos.id_producto = producto.id;
+            const boton = f.querySelector('.formulario__submit');
+            boton.disabled = true;
+            try {
+                const resp = await fetch('/api/pedidos', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(datos)
+                });
+                const r = await resp.json();
+                if (r.ok) {
+                    mostrarMensaje('¡Gracias por tu compra! Pedido #' + r.id_pedido + ' por ' + pesos(r.total) + ' registrado.', false);
+                    f.reset();
+                    actualizarTotal();
+                } else {
+                    mostrarMensaje(r.error, true);
+                }
+            } catch (err) {
+                mostrarMensaje('No se pudo conectar con el servidor.', true);
+            }
+            boton.disabled = false;
+        });
+
+        cargar();
+    </script>
+</body>
+</html>
